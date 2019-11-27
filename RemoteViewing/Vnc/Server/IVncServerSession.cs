@@ -91,7 +91,7 @@ namespace RemoteViewing.Vnc.Server
         /// Gets or sets a function which initializes a new <see cref="IVncFramebufferCache"/> for use by
         /// this <see cref="VncServerSession"/>.
         /// </summary>
-        Func<VncFramebuffer, ILog, IVncFramebufferCache> CreateFramebufferCache { get; set; }
+        Func<IVncFramebuffer, ILog, IVncFramebufferCache> CreateFramebufferCache { get; set; }
 
         /// <summary>
         /// Gets information about the client's most recent framebuffer update request.
@@ -115,7 +115,7 @@ namespace RemoteViewing.Vnc.Server
         /// Sets the framebuffer source.
         /// </summary>
         /// <param name="source">The framebuffer source, or <see langword="null"/> if you intend to handle the framebuffer manually.</param>
-        void SetFramebufferSource(IVncFramebufferSource source);
+        void SetFramebufferSource(IVncFramebuffer source);
 
         /// <summary>
         /// Begins a manual framebuffer update.

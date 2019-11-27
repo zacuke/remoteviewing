@@ -53,7 +53,7 @@ namespace RemoteViewing.Vnc.Server
         private IVncFramebufferCache fbuAutoCache;
         private List<Rectangle> fbuRectangles = new List<Rectangle>();
         private object fbuSync = new object();
-        private IVncFramebufferSource fbSource;
+        private IVncFramebuffer fbSource;
         private double maxUpdateRate;
         private Utility.PeriodicThread requester;
         private object specialSync = new object();
@@ -165,7 +165,7 @@ namespace RemoteViewing.Vnc.Server
         /// <summary>
         /// Gets the framebuffer for the VNC session.
         /// </summary>
-        public VncFramebuffer Framebuffer
+        public IVncFramebuffer Framebuffer
         {
             get;
             private set;
@@ -270,8 +270,7 @@ namespace RemoteViewing.Vnc.Server
         /// Gets or sets a function which initializes a new <see cref="IVncFramebufferCache"/> for use by
         /// this <see cref="VncServerSession"/>.
         /// </summary>
-        public Func<VncFramebuffer, ILog, IVncFramebufferCache> CreateFramebufferCache
-        { get; set; } = (framebuffer, log) => new VncFramebufferCache(framebuffer, log);
+        Func<IVncFramebuffer, ILog, IVncFramebufferCache> IVncServerSession.CreateFramebufferCache { get; set; } = (framebuffer, log) => new VncFramebufferCache(framebuffer, log);
 
         /// <summary>
         /// Closes the connection with the remote client.
@@ -350,11 +349,11 @@ namespace RemoteViewing.Vnc.Server
         /// Sets the framebuffer source.
         /// </summary>
         /// <param name="source">The framebuffer source, or <see langword="null"/> if you intend to handle the framebuffer manually.</param>
-        public void SetFramebufferSource(IVncFramebufferSource source)
+        public void SetFramebufferSource(IVncFramebuffer source)
         {
             this.fbSource = source;
         }
-
+       
         /// <summary>
         /// Notifies the framebuffer update thread to check for recent changes.
         /// </summary>
@@ -696,6 +695,11 @@ namespace RemoteViewing.Vnc.Server
             }
 
             return e.SentChanges;
+        }
+
+        private IVncFramebufferCache CreateFramebufferCache(IVncFramebuffer framebuffer, ILog logger)
+        {
+            return new VncFramebufferCache(framebuffer, logger);
         }
 
         private void ThreadMain()

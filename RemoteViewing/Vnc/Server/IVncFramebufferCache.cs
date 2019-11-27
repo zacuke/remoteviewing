@@ -29,15 +29,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace RemoteViewing.Vnc.Server
 {
     /// <summary>
-    /// Caches the <see cref="VncFramebuffer"/> pixel data and updates them as new
-    /// <see cref="VncFramebuffer"/> commands are received.
+    /// Caches the <see cref="IVncFramebuffer"/> pixel data and updates them as new
+    /// <see cref="IVncFramebuffer"/> commands are received.
     /// </summary>
     public interface IVncFramebufferCache
     {
         /// <summary>
-        /// Gets an up-to-date and complete <see cref="VncFramebuffer"/>.
+        /// Gets an up-to-date and complete <see cref="IVncFramebuffer"/>.
         /// </summary>
-        VncFramebuffer Framebuffer
+        IVncFramebuffer Framebuffer
         { get; }
 
         /// <summary>

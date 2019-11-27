@@ -44,11 +44,12 @@ namespace RemoteViewing.Vnc.Server
         private readonly ILog logger;
 
         private readonly bool[] isLineInvalid;
+        private readonly object obj = new object();
 
         // We cache the latest framebuffer data as it was sent to the client. When looking for changes,
         // we compare with the framebuffer which is cached here and send the deltas (for each time
         // which was invalidate) to the client.
-        private VncFramebuffer cachedFramebuffer;
+        private byte[] cachedBytes;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="VncFramebufferCache"/> class.
@@ -59,7 +60,7 @@ namespace RemoteViewing.Vnc.Server
         /// <param name="logger">
         /// The <see cref="ILog"/> logger to use when logging diagnostic messages.
         /// </param>
-        public VncFramebufferCache(VncFramebuffer framebuffer, ILog logger)
+        public VncFramebufferCache(IVncFramebuffer framebuffer, ILog logger)
         {
             if (framebuffer == null)
             {
@@ -67,8 +68,9 @@ namespace RemoteViewing.Vnc.Server
             }
 
             this.Framebuffer = framebuffer;
-            this.cachedFramebuffer = new VncFramebuffer(framebuffer.Name, framebuffer.Width, framebuffer.Height, framebuffer.PixelFormat);
+            this.cachedBytes = new byte[framebuffer.Width * framebuffer.Height * framebuffer.PixelFormat.BytesPerPixel];
 
+            // this.cachedFramebuffer = framebuffer;// new VncFramebuffer(framebuffer.Name, framebuffer.Width, framebuffer.Height, framebuffer.PixelFormat);
             this.logger = logger;
             this.isLineInvalid = new bool[this.Framebuffer.Height];
         }
@@ -76,7 +78,7 @@ namespace RemoteViewing.Vnc.Server
         /// <summary>
         /// Gets an up-to-date and complete <see cref="VncFramebuffer"/>.
         /// </summary>
-        public VncFramebuffer Framebuffer
+        public IVncFramebuffer Framebuffer
         {
             get;
             private set;
@@ -115,10 +117,9 @@ namespace RemoteViewing.Vnc.Server
             // both buffers heavily in the next block.
             lock (fb.SyncRoot)
             {
-                lock (this.cachedFramebuffer.SyncRoot)
+                lock (this.obj)
                 {
                     var actualBuffer = this.Framebuffer.GetBuffer();
-                    var bufferedBuffer = this.cachedFramebuffer.GetBuffer();
 
                     // In this block, we will determine which rectangles need updating. Right now, we consider
                     // each line at once. It's not a very efficient algorithm, but it works.
@@ -140,15 +141,14 @@ namespace RemoteViewing.Vnc.Server
                         int srcOffset = (y * this.Framebuffer.Stride) + (bpp * region.X);
                         int length = bpp * region.Width;
 
-
                         var isValid = actualBuffer.AsSpan().Slice(srcOffset, length)
-                                          .SequenceCompareTo(bufferedBuffer.AsSpan().Slice(srcOffset, length)) == 0;
+                                          .SequenceCompareTo(this.cachedBytes.AsSpan().Slice(srcOffset, length)) == 0;
 
                         if (!isValid)
                         {
                             try
                             {
-                                Buffer.BlockCopy(actualBuffer, srcOffset, bufferedBuffer, srcOffset, length);
+                                Buffer.BlockCopy(actualBuffer, srcOffset, this.cachedBytes, srcOffset, length);
                             }
                             catch
                             {

@@ -29,7 +29,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 using RemoteViewing.Logging;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -59,10 +61,13 @@ namespace RemoteViewing.Vnc.Server
         private object specialSync = new object();
         private Thread threadMain;
         private bool securityNegotiated = false;
-#if DEFLATESTREAM_FLUSH_WORKS
-        MemoryStream _zlibMemoryStream;
-        DeflateStream _zlibDeflater;
-#endif
+
+        //private MemoryStream _zlibMemoryStream;
+        //private MemoryStream _zlibMemoryStreamTest;
+
+        //private DeflateStream _zlibDeflater;
+        //private DeflateStream _zlibDeflaterTest;
+
 
         /// <summary>
         /// Initializes a new instance of the <see cref="VncServerSession"/> class.
@@ -307,6 +312,24 @@ namespace RemoteViewing.Vnc.Server
             }
         }
 
+        public void ConnectAndWait(Stream stream, VncServerSessionOptions options = null)
+        {
+            Throw.If.Null(stream, "stream");
+
+            //lock (this.c.SyncRoot)
+            //{
+            //  this.Close();
+
+            this.options = options ?? new VncServerSessionOptions();
+            this.c.Stream = stream;
+
+            //this.threadMain = new Thread(this.ThreadMain);
+            //this.threadMain.IsBackground = true;
+            //this.threadMain.Start();
+
+            ThreadMain();
+            //}
+        }
         /// <summary>
         /// Tells the client to play a bell sound.
         /// </summary>
@@ -353,7 +376,7 @@ namespace RemoteViewing.Vnc.Server
         {
             this.fbSource = source;
         }
-       
+
         /// <summary>
         /// Notifies the framebuffer update thread to check for recent changes.
         /// </summary>
@@ -414,6 +437,7 @@ namespace RemoteViewing.Vnc.Server
             this.FramebufferManualInvalidate(new VncRectangle(0, 0, this.Framebuffer.Width, this.Framebuffer.Height));
         }
 
+
         /// <inheritdoc/>
         public void FramebufferManualInvalidate(VncRectangle region)
         {
@@ -439,33 +463,51 @@ namespace RemoteViewing.Vnc.Server
                 w * bpp,
                 cpf);
 
-#if DEFLATESTREAM_FLUSH_WORKS
-            if (_clientEncoding.Contains(VncEncoding.Zlib))
+            if (clientEncoding.Contains(VncEncoding.Zlib))
             {
-                _zlibMemoryStream.Position = 0;
-                _zlibMemoryStream.SetLength(0);
-                _zlibMemoryStream.Write(new byte[4], 0, 4);
-
-                if (_zlibDeflater == null)
-                {
-                    _zlibMemoryStream.Write(new[] { (byte)120, (byte)218 }, 0, 2);
-                    _zlibDeflater = new DeflateStream(_zlibMemoryStream, CompressionMode.Compress, false);
-                }
-
-                _zlibDeflater.Write(contents, 0, contents.Length);
-                _zlibDeflater.Flush();
-                contents = _zlibMemoryStream.ToArray();
-
-                VncUtility.EncodeUInt32BE(contents, 0, (uint)(contents.Length - 4));
-                AddRegion(region, VncEncoding.Zlib, contents);
+                byte[] zlibContents = Compress(contents);
+                var lenArray = new byte[4];
+                VncUtility.EncodeUInt32BE(lenArray, 0, (uint)(zlibContents.Length));
+                var finArray = Combine(lenArray, zlibContents);
+                AddRegion(region, VncEncoding.Zlib, finArray);
             }
             else
-#endif
             {
                 this.AddRegion(region, VncEncoding.Raw, contents);
             }
         }
+        private static byte[] Compress(byte[] data)
+        {
+            MemoryStream output = new MemoryStream();
+            using (DeflateStream dstream = new DeflateStream(output, CompressionLevel.Optimal))
+            {
+                dstream.Write(data, 0, data.Length);
+            }
+            return output.ToArray();
+        }
 
+        private static byte[] Decompress(byte[] data)
+        {
+            MemoryStream input = new MemoryStream(data);
+            MemoryStream output = new MemoryStream();
+            using (DeflateStream dstream = new DeflateStream(input, CompressionMode.Decompress))
+            {
+                dstream.CopyTo(output);
+            }
+            return output.ToArray();
+        }
+
+        private byte[] Combine(params byte[][] arrays)
+        {
+            byte[] rv = new byte[arrays.Sum(a => a.Length)];
+            int offset = 0;
+            foreach (byte[] array in arrays)
+            {
+                System.Buffer.BlockCopy(array, 0, rv, offset, array.Length);
+                offset += array.Length;
+            }
+            return rv;
+        }
         /// <inheritdoc/>
         public void FramebufferManualInvalidate(VncRectangle[] regions)
         {
@@ -702,7 +744,7 @@ namespace RemoteViewing.Vnc.Server
             return new VncFramebufferCache(framebuffer, logger);
         }
 
-        private void ThreadMain()
+        public void ThreadMain()
         {
             this.requester = new Utility.PeriodicThread();
 
@@ -986,10 +1028,11 @@ namespace RemoteViewing.Vnc.Server
         private void InitFramebufferEncoder()
         {
             this.logger?.Log(LogLevel.Info, () => "Initializing the frame buffer encoder");
-#if DEFLATESTREAM_FLUSH_WORKS
-            _zlibMemoryStream = new MemoryStream();
-            _zlibDeflater = null;
-#endif
+            //_zlibMemoryStream = new MemoryStream();
+            //_zlibDeflater = null;
+            //_zlibMemoryStreamTest = new MemoryStream();
+            //_zlibDeflaterTest = null;
+
             this.logger?.Log(LogLevel.Info, () => "Initialized the frame buffer encoder");
         }
 

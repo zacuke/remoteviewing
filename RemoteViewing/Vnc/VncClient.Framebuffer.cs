@@ -40,13 +40,13 @@ namespace RemoteViewing.Vnc
     {
         private byte[] framebufferScratch = new byte[0];
         private byte[] zlibScratch = new byte[0];
-        private Stream zlibMemoryStream;
-        private DeflateStream zlibInflater;
+        //private Stream zlibMemoryStream;
+        //private DeflateStream zlibInflater;
 
         private void InitFramebufferDecoder()
         {
-            this.zlibMemoryStream = new MemoryStream();
-            this.zlibInflater = null; // Don't reuse the dictionary between sessions.
+            //this.zlibMemoryStream = new MemoryStream();
+            //this.zlibInflater = null; // Don't reuse the dictionary between sessions.
         }
 
         private byte[] AllocateFramebufferScratch(int bytes)
@@ -208,46 +208,12 @@ namespace RemoteViewing.Vnc
                     case VncEncoding.Zlib:
                         int bytesDesired = w * h * bpp;
 
-                        int size = (int)this.c.ReceiveUInt32BE(); VncStream.SanityCheck(size >= 0 && size < 0x10000000);
+                        int size = (int)this.c.ReceiveUInt32BE();
+                        VncStream.SanityCheck(size >= 0 && size < 0x10000000);
                         VncUtility.AllocateScratch(size, ref this.zlibScratch);
                         this.c.Receive(this.zlibScratch, 0, size);
+                        pixels = Decompress(zlibScratch);
 
-                        this.zlibMemoryStream.Position = 0;
-                        this.zlibMemoryStream.Write(this.zlibScratch, 0, size);
-                        this.zlibMemoryStream.SetLength(size);
-                        this.zlibMemoryStream.Position = 0;
-
-                        if (this.zlibInflater == null)
-                        {
-                            // Zlib has a two-byte header.
-                            VncStream.SanityCheck(size >= 2);
-                            this.zlibMemoryStream.Position = 2;
-                            this.zlibInflater = new DeflateStream(this.zlibMemoryStream, CompressionMode.Decompress, false);
-                        }
-
-                        pixels = this.AllocateFramebufferScratch(bytesDesired);
-                        for (int j = 0; j < bytesDesired;)
-                        {
-                            int count = 0;
-
-                            try
-                            {
-                                count = this.zlibInflater.Read(pixels, j, bytesDesired - j);
-                            }
-                            catch (InvalidDataException)
-                            {
-                                VncStream.Require(
-                                    false,
-                                                      "Bad data compressed.",
-                                                      VncFailureReason.UnrecognizedProtocolElement);
-                            }
-
-                            VncStream.Require(
-                                count > 0,
-                                                  "No data compressed.",
-                                                  VncFailureReason.UnrecognizedProtocolElement);
-                            j += count;
-                        }
 
                         if (inRange)
                         {
@@ -280,6 +246,27 @@ namespace RemoteViewing.Vnc
             }
 
             return encoding != VncEncoding.DesktopSize;
+        }
+
+        private static byte[] Compress(byte[] data)
+        {
+            MemoryStream output = new MemoryStream();
+            using (DeflateStream dstream = new DeflateStream(output, CompressionLevel.Optimal))
+            {
+                dstream.Write(data, 0, data.Length);
+            }
+            return output.ToArray();
+        }
+
+        private static byte[] Decompress(byte[] data)
+        {
+            MemoryStream input = new MemoryStream(data);
+            MemoryStream output = new MemoryStream();
+            using (DeflateStream dstream = new DeflateStream(input, CompressionMode.Decompress))
+            {
+                dstream.CopyTo(output);
+            }
+            return output.ToArray();
         }
     }
 }

@@ -61,6 +61,8 @@ namespace RemoteViewing.Vnc.Server
         private object specialSync = new object();
         private Thread threadMain;
         private bool securityNegotiated = false;
+        private int regionCurr = -1;
+        private int regionSize = 10;
 
         //private MemoryStream _zlibMemoryStream;
         //private MemoryStream _zlibMemoryStreamTest;
@@ -628,11 +630,7 @@ namespace RemoteViewing.Vnc.Server
         /// </summary>
         protected virtual void OnFramebufferCapturing()
         {
-            var ev = this.FramebufferCapturing;
-            if (ev != null)
-            {
-                ev(this, EventArgs.Empty);
-            }
+            this.FramebufferCapturing?.Invoke(this, EventArgs.Empty);
         }
 
         /// <summary>
@@ -643,11 +641,7 @@ namespace RemoteViewing.Vnc.Server
         /// </param>
         protected virtual void OnFramebufferUpdating(FramebufferUpdatingEventArgs e)
         {
-            var ev = this.FramebufferUpdating;
-            if (ev != null)
-            {
-                ev(this, e);
-            }
+            this.FramebufferUpdating?.Invoke(this, e);
         }
 
         /// <summary>
@@ -701,23 +695,49 @@ namespace RemoteViewing.Vnc.Server
 
             lock (this.FramebufferUpdateRequestLock)
             {
+
+                if (this.FramebufferUpdateRequest == null)
+                {
+                    var incremental = false;
+                    if (regionCurr == -1)
+                    {
+                        regionCurr = 0;
+                        incremental = true;
+                    };
+
+                    var width = (Framebuffer.Width / regionSize);
+                    var height = Framebuffer.Height;
+
+                    var x = ((regionCurr % regionSize) * width);
+
+                    regionCurr++;
+
+                    if (regionCurr >= regionSize)
+                        regionCurr = 0;
+
+                    this.FramebufferUpdateRequest = new FramebufferUpdateRequest(
+                       incremental, new VncRectangle(x, 0, width, height));
+                }
+
+
+
                 if (this.FramebufferUpdateRequest != null)
                 {
                     var fbSource = this.fbSource;
                     if (fbSource != null)
                     {
-                        try
-                        {
+                        //try
+                        //{
                             var newFramebuffer = fbSource.Capture();
                             if (newFramebuffer != null && newFramebuffer != this.Framebuffer)
                             {
                                 this.Framebuffer = newFramebuffer;
                             }
-                        }
-                        catch (Exception exc)
-                        {
-                            this.logger?.Log(LogLevel.Error, () => $"Capturing the framebuffer source failed: {exc}.");
-                        }
+                        //}
+                        //catch (Exception exc)
+                        //{
+                        //    this.logger?.Log(LogLevel.Error, () => $"Capturing the framebuffer source failed: {exc}.");
+                        //}
                     }
 
                     this.OnFramebufferCapturing();
@@ -758,7 +778,7 @@ namespace RemoteViewing.Vnc.Server
                 this.NegotiateDesktop();
                 this.NegotiateEncodings();
 
-                this.requester.Start(() => this.FramebufferSendChanges(), () => this.MaxUpdateRate, false);
+                this.requester.Start(() => this.FramebufferSendChanges(), () => this.maxUpdateRate * regionSize, false);
 
                 this.IsConnected = true;
                 this.logger?.Log(LogLevel.Info, () => "The client has connected successfully");
@@ -812,7 +832,6 @@ namespace RemoteViewing.Vnc.Server
                 this.logger?.Log(LogLevel.Error, () => $"VNC server session stopped due to: {exception.Message}");
             }
 
-            this.requester.Stop();
 
             this.c.Stream = null;
             if (this.IsConnected)
@@ -823,7 +842,10 @@ namespace RemoteViewing.Vnc.Server
             else
             {
                 this.OnConnectionFailed();
-            }
+            }  
+            
+            this.requester.Stop();
+
         }
 
         private void NegotiateVersion(out AuthenticationMethod[] methods)

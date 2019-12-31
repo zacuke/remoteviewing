@@ -482,23 +482,23 @@ namespace RemoteViewing.Vnc
 
         private void ThreadMain()
         {
-            var requester = new Utility.PeriodicThread();
+            //var requester = new Utility.PeriodicThread();
             this.IsConnected = true;
             this.OnConnected();
 
             try
             {
-                requester.Start(
-                    () =>
-                    {
-                        this.SendFramebufferUpdateRequest(true);
-                    },
-                    () => this.MaxUpdateRate,
-                    true);
+                //requester.Start(
+                //    () =>
+                //    {
+                //        this.SendFramebufferUpdateRequest(true);
+                //    },
+                //    () => this.MaxUpdateRate,
+                //    true);
 
                 while (true)
                 {
-                    this.HandleResponse(requester);
+                    this.HandleResponse();
                 }
             }
             catch (ObjectDisposedException)
@@ -511,7 +511,9 @@ namespace RemoteViewing.Vnc
             {
             }
 
-            requester.Stop();
+           // requester.Stop();
+
+            //cts.Cancel();
 
             this.c.Stream = null;
             this.IsConnected = false;
@@ -675,10 +677,98 @@ namespace RemoteViewing.Vnc
                 this.c.SendUInt32BE((uint)encoding);
             }
         }
+        int regionCurr = 0;
+        int regionSize = 10;
 
         private void SendFramebufferUpdateRequest(bool incremental)
         {
-            this.SendFramebufferUpdateRequest(incremental, 0, 0, this.Framebuffer.Width, this.Framebuffer.Height);
+
+            if (incremental)
+            {
+
+                var width = (Framebuffer.Width / regionSize);
+                var height = Framebuffer.Height;
+
+                var x = ((regionCurr % regionSize) * width);
+                //var y = ((regionCurr / regionSize) * height) - 1;
+                //if (x == -1) x = 0;
+                //if (y == -1) y = 0;
+
+                this.SendFramebufferUpdateRequest(incremental, x, 0, width, height);
+
+
+                regionCurr++;
+
+                if (regionCurr >= regionSize)
+                    regionCurr = 0;
+
+
+                //var width = 0;
+                //var height = 0;
+                //width = Framebuffer.Width / 2;
+                //height = Framebuffer.Height / 2;
+
+                //switch (regionCurr)
+                //{
+                //    case 0:
+                //        SendFramebufferUpdateRequest(incremental, 0, 0, width, height);
+                //        regionCurr++;
+                //        break;
+                //    case 1:
+                //        SendFramebufferUpdateRequest(incremental, width, 0, width - 1, height);
+
+                //        regionCurr++;
+
+                //        break;
+                //    case 2:
+                //        //SendFramebufferUpdateRequest(incremental, 0, height, width,100);
+                //        SendFramebufferUpdateRequest(incremental, 0, 1, width, 50);
+
+                //        regionCurr++;
+                //        break;
+                //    case 3:
+                //        //SendFramebufferUpdateRequest(incremental, width - 1, height - 1, width, height);
+                //        SendFramebufferUpdateRequest(incremental, 0, 0, width, height);
+
+                //        regionCurr = 0;
+                //        break;
+
+                //}
+                //var width = Framebuffer.Width/2;
+                //var height = Framebuffer.Height;
+
+                //if (regionCurr == 0)
+                //{
+                //    this.SendFramebufferUpdateRequest(incremental, 0, 0, width, height);
+                //    regionCurr = 1;
+                //}
+                //else
+                //{
+                //    this.SendFramebufferUpdateRequest(incremental, width, 0, width, height);
+
+                //    regionCurr = 0;
+
+                //}
+
+                //var width = (Framebuffer.Width / regionSize);
+                //var height = (Framebuffer.Height / regionSize);
+
+                //var x = ((regionCurr % regionSize) * width) - 1;
+                //var y = ((regionCurr / regionSize) * height) - 1;
+                //if (x == -1) x = 0;
+                //if (y == -1) y = 0;
+                //this.SendFramebufferUpdateRequest(incremental, x, y, width - 1, height - 1);
+
+                //regionCurr++;
+
+                //if (regionCurr >= regionSize * regionSize)
+                //    regionCurr = 0;
+            }
+            else
+            {
+                this.SendFramebufferUpdateRequest(incremental, 0, 0, Framebuffer.Width, Framebuffer.Height);
+
+            }
         }
 
         private void SendFramebufferUpdateRequest(bool incremental, int x, int y, int width, int height)
